@@ -64,6 +64,15 @@ correlation (~0.6), <i>not</i> 1.0, confirming the true fold best matches experi
 <p class="cap">Predicted SHAPE correlated to the reference-model simulated SHAPE (ceiling analysis).
 The reference trivially sits at correlation = 1.0 (black star).</p>
 
+<h2>Structural-accuracy consistency: base-pair F1 vs RMSD</h2>
+<img src="data:image/png;base64,{img_b64('results/f1_vs_rmsd.png')}">
+<p class="cap">Two structural-accuracy measures agree (lower RMSD → higher F1).</p>
+
+<h2>Do the two SHAPE predictors agree?</h2>
+<img src="data:image/png;base64,{img_b64('results/sgnm_vs_naive.png')}">
+<p class="cap">SGNM-predicted vs naive paired/unpaired SHAPE correlation, for both
+experimental and reference-model targets.</p>
+
 <h2>Secondary-structure SHAPE proxy heatmap</h2>
 <img src="data:image/png;base64,{img_b64('results/shape_heatmap_naive.png')}">
 <p class="cap">Unique DSSR secondary structures (dot-bracket on each cell), white=paired, red=unpaired,

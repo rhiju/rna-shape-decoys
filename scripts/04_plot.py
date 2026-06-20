@@ -87,41 +87,71 @@ def panel(ax, xcol, ycol, xlabel, ylabel, title, refx, refy):
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
 
 
-def make_figure(kind, shape_label, out_png):
-    """kind in {'expt','ref'}; uses the matching shape_*_vs_<kind> columns."""
+DOWN = r'  ($\downarrow$ better)'
+UP = r'  ($\uparrow$ better)'
+RMSD_LAB = 'RMSD to reference (Å)' + DOWN
+F1_LAB = 'Base-pair F1 vs reference' + UP
+
+
+def make_main_figure(kind, shape_label, out_png):
+    """Main 2x2: SHAPE correlation vs structural accuracy (RMSD, F1).
+    kind in {'expt','ref'}."""
     naive_col = f'shape_naive_vs_{kind}'
     sgnm_col = f'shape_sgnm_vs_{kind}'
     r = REF[kind]
-    DOWN = r'  ($\downarrow$ better)'
-    UP = r'  ($\uparrow$ better)'
-    RMSD = 'RMSD to reference (Å)' + DOWN
-    F1 = 'Base-pair F1 vs reference' + UP
     NAIVE = f'Naive SHAPE corr ({shape_label})' + UP
     SGNM = f'SGNM SHAPE corr ({shape_label})' + UP
 
-    fig, ax = plt.subplots(2, 3, figsize=(20, 12))
-    panel(ax[0, 0], 'rmsd', naive_col, RMSD, NAIVE, 'Naive SHAPE vs RMSD',
+    fig, ax = plt.subplots(2, 2, figsize=(14, 12))
+    panel(ax[0, 0], 'rmsd', naive_col, RMSD_LAB, NAIVE, 'Naive SHAPE vs RMSD',
           r['rmsd'], r['naive'])
-    panel(ax[0, 1], 'rmsd', sgnm_col, RMSD, SGNM, 'SGNM SHAPE vs RMSD',
+    panel(ax[0, 1], 'rmsd', sgnm_col, RMSD_LAB, SGNM, 'SGNM SHAPE vs RMSD',
           r['rmsd'], r['sgnm'])
-    panel(ax[0, 2], 'rmsd', 'f1_bp', RMSD, F1, 'Base-pair F1 vs RMSD',
-          r['rmsd'], r['f1_bp'])
-    panel(ax[1, 0], 'f1_bp', naive_col, F1, NAIVE, 'Naive SHAPE vs F1',
+    panel(ax[1, 0], 'f1_bp', naive_col, F1_LAB, NAIVE, 'Naive SHAPE vs F1',
           r['f1_bp'], r['naive'])
-    panel(ax[1, 1], 'f1_bp', sgnm_col, F1, SGNM, 'SGNM SHAPE vs F1',
+    panel(ax[1, 1], 'f1_bp', sgnm_col, F1_LAB, SGNM, 'SGNM SHAPE vs F1',
           r['f1_bp'], r['sgnm'])
-    panel(ax[1, 2], naive_col, sgnm_col, NAIVE, SGNM, 'SGNM vs Naive SHAPE',
-          r['naive'], r['sgnm'])
 
     title = ('SHAPE vs EXPERIMENTAL data' if kind == 'expt'
              else 'SHAPE vs REFERENCE-MODEL simulated data')
-    fig.suptitle(f'{title} — RNA 3D decoy discrimination (CASP17 R2307)',
-                 fontsize=18, fontweight='bold')
+    fig.suptitle(f'{title} — SHAPE agreement vs structural accuracy (CASP17 R2307)',
+                 fontsize=16, fontweight='bold')
     fig.tight_layout()
     fig.savefig(out_png, dpi=150, bbox_inches='tight')
     print(f"Saved {out_png}")
     subprocess.run(['open', out_png])
 
 
-make_figure('expt', 'vs experiment', 'results/shape_vs_rmsd_experimental.png')
-make_figure('ref', 'vs ref model', 'results/shape_vs_rmsd_reference.png')
+def make_f1_vs_rmsd_figure(out_png):
+    """Structure-vs-structure sanity check: base-pair F1 vs RMSD (kind-independent)."""
+    fig, ax = plt.subplots(figsize=(8, 7))
+    panel(ax, 'rmsd', 'f1_bp', RMSD_LAB, F1_LAB,
+          'Base-pair F1 vs RMSD (structural-accuracy consistency)',
+          REF['expt']['rmsd'], REF['expt']['f1_bp'])
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=150, bbox_inches='tight')
+    print(f"Saved {out_png}")
+    subprocess.run(['open', out_png])
+
+
+def make_sgnm_vs_naive_figure(out_png):
+    """SHAPE-vs-SHAPE: do the two predictors agree? (experimental & reference)."""
+    fig, ax = plt.subplots(1, 2, figsize=(15, 7))
+    for j, (kind, lab) in enumerate([('expt', 'vs experiment'), ('ref', 'vs ref model')]):
+        r = REF[kind]
+        panel(ax[j], f'shape_naive_vs_{kind}', f'shape_sgnm_vs_{kind}',
+              f'Naive SHAPE corr ({lab})' + UP,
+              f'SGNM SHAPE corr ({lab})' + UP,
+              f'SGNM vs Naive SHAPE ({lab})', r['naive'], r['sgnm'])
+    fig.suptitle('Do the two SHAPE predictors agree? (CASP17 R2307)',
+                 fontsize=16, fontweight='bold')
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=150, bbox_inches='tight')
+    print(f"Saved {out_png}")
+    subprocess.run(['open', out_png])
+
+
+make_main_figure('expt', 'vs experiment', 'results/shape_vs_rmsd_experimental.png')
+make_main_figure('ref', 'vs ref model', 'results/shape_vs_rmsd_reference.png')
+make_f1_vs_rmsd_figure('results/f1_vs_rmsd.png')
+make_sgnm_vs_naive_figure('results/sgnm_vs_naive.png')
