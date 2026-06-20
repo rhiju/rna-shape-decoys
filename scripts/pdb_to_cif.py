@@ -118,18 +118,27 @@ def pdb_to_cif(pdb_path, cif_path, data_name='structure'):
         out.write('_struct_asym.entity_id                   1\n')
         out.write('_struct_asym.details                     ?\n#\n')
 
-        # _atom_site loop
+        # _atom_site loop.
+        # IMPORTANT: ciffy's C parser is column-alignment sensitive — fields must
+        # be padded to consistent per-column widths (single-space-joined rows make
+        # ciffy mis-read atom names and fail atom typing). So we build rows as
+        # field lists and left-justify each column.
         out.write('loop_\n')
         for c in _ATOM_SITE_COLS:
             out.write(f'_atom_site.{c}\n')
+        rows = []
         for i, a in enumerate(atoms, 1):
             lseq = label_seq[(a['chain'], a['res_seq'])]
             an = q(a['atom_name'])
-            out.write(
-                f"ATOM {i} {a['elem']} {an} . {a['res_name']} {a['chain']} 1 {lseq} ? "
-                f"{a['x']:.3f} {a['y']:.3f} {a['z']:.3f} {a['occ']} {a['bfac']} ? "
-                f"{a['res_seq']} {a['res_name']} {a['chain']} {an} 1\n"
-            )
+            rows.append([
+                'ATOM', str(i), a['elem'], an, '.', a['res_name'], a['chain'],
+                '1', str(lseq), '?', f"{a['x']:.3f}", f"{a['y']:.3f}",
+                f"{a['z']:.3f}", a['occ'], a['bfac'], '?', str(a['res_seq']),
+                a['res_name'], a['chain'], an, '1',
+            ])
+        widths = [max(len(r[c]) for r in rows) for c in range(len(_ATOM_SITE_COLS))]
+        for r in rows:
+            out.write('  '.join(r[c].ljust(widths[c]) for c in range(len(r))) + '\n')
         out.write('#\n')
 
         # _pdbx_poly_seq_scheme loop

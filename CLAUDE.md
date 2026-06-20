@@ -28,30 +28,41 @@ Key helpers: `scripts/dssr_util.py` (DSSR SS, strips `&` backbone breaks),
 Regular `pip install` (NOT editable) for ~/src/{dlu,ciffy,sgnm}; checkpoints via
 `gh release download v2.0.2 -p "*checkpoint*"`. GNM runs on CPU; ERM needs CUDA.
 
-## TODO — next session (deferred)
+## Running ERM (deferred to a GPU — Colab)
 
-1. **Run ERM (equivariant) model on a GPU node.** It's the stronger predictor
-   (val corr +0.63 SHAPE / +0.75 DMS vs GNM +0.39/+0.35) but needs `flash-eq`
-   (CUDA-only). Install `pip install 'sgnm[equivariant]'` on a CUDA box, load
-   `equivariant-checkpoint.pth`, add an `shape_erm_vs_expt` / `shape_erm_vs_ref`
-   column, and regenerate the scatter figures.
-2. **Sanity-check: re-run GNM/SGNM on the GPU node** and confirm predictions
-   match the Mac CPU results (rules out platform/numerical issues).
-3. **After ERM is in:** draft PRs into the upstream repos to reduce install/usage
-   pain points for future users:
-   - `hmblair/ciffy`: duplicate `fallback_version` in pyproject (already fixed
-     locally); consider native PDB-format input (ciffy currently reads mmCIF only —
-     this is the biggest pain point; see pdb_to_cif note below).
-   - `hmblair/sgnm`: pyproject requires `dlu` but the dist is `dlu-torch`
-     (use `dlu-torch` or document `--no-deps`); editable-install namespace clash.
-   - `hmblair/dlu`: document the `dlu-torch` dist-name vs `dlu` import-name.
+ERM is the stronger predictor (val corr +0.63 SHAPE / +0.75 DMS vs GNM
++0.39/+0.35) but is atom-level and needs `flash-eq` (CUDA-only; no CPU/MPS path,
+and it can't be validated on the Mac). Run it on a free Colab T4:
 
-## pdb_to_cif status (for the ciffy PR)
+1. Open `notebooks/run_erm_colab.ipynb` in Colab, set GPU runtime, Run all.
+   It installs the stack, clones this repo, downloads `equivariant-checkpoint.pth`,
+   verifies atom typing, runs `scripts/run_erm.py`, and downloads
+   `results/erm_profiles.csv`.
+2. Locally: drop `erm_profiles.csv` into `results/`, then
+   `python3 scripts/ingest_erm.py` — merges `shape_erm_vs_expt` /
+   `shape_erm_vs_ref` into scores.csv and regenerates plots, metrics, report.
+   (04_plot / 08_metrics auto-include ERM once the columns exist.)
+3. **Sanity check on the GPU**: the notebook can also run `scripts/03_shape_sgnm.py`
+   to confirm GNM predictions match the Mac CPU results.
 
-`scripts/pdb_to_cif.py` writes mmCIF that ciffy will *parse* (all required blocks:
-atom_site, entity, entity_poly, entity_poly_seq, struct_asym, pdbx_poly_seq_scheme)
-BUT ciffy then mis-types most atoms (code 0) for our PDBs — not yet a clean,
-proposable pipeline. The proven path is `sgnm_predict.py` (bypass). Before
-proposing PDB support to ciffy, root-cause the atom-typing failure (atom ordering
-within residue / hydrogen naming) so a converter or a native reader types atoms
-correctly. Do NOT propose pdb_to_cif.py to ciffy as-is.
+## pdb_to_cif — SOLVED (and a ciffy PR candidate)
+
+`scripts/pdb_to_cif.py` now produces mmCIF that ciffy parses **and types
+correctly** (code-0 = 0 on FARFAR2 + CASP17). Verified: SGNM via the converted
+CIF matches the `sgnm_predict.py` bypass (corr 0.987). This is what makes ERM
+possible (ERM needs a real ciffy Polymer; the bypass only works for SGNM).
+
+Root cause of the earlier mis-typing: **ciffy's C mmCIF parser is whitespace-
+column sensitive** — collapsing aligned `_atom_site` columns to single spaces
+makes it mis-read atom names (even on the official 9FO9 example: 972/1053 atoms
+go untyped). The converter now emits per-column left-justified (aligned) rows.
+
+## TODO — PR phase (after ERM is in)
+
+Draft PRs to reduce install/usage pain for future users:
+- `hmblair/ciffy`: (a) **whitespace-tolerant mmCIF parsing** (the alignment bug
+  above — strong, well-isolated PR with a repro); (b) duplicate `fallback_version`
+  in pyproject (fixed locally); (c) optionally native PDB input.
+- `hmblair/sgnm`: pyproject requires `dlu` but the dist is `dlu-torch`
+  (use `dlu-torch` or document `--no-deps`); editable-install namespace clash.
+- `hmblair/dlu`: document the `dlu-torch` dist-name vs `dlu` import-name.

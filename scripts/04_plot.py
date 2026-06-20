@@ -64,6 +64,14 @@ REF = {
              'sgnm': pearsonr(ref_sgnm[_m], exp[_m])[0]},
     'ref':  {'rmsd': 0.0, 'f1_bp': 1.0, 'naive': 1.0, 'sgnm': 1.0},
 }
+# ERM reference point (if ERM profiles were produced on a GPU)
+_erm_path = Path('results/erm_profiles.csv')
+if _erm_path.exists():
+    _ep = pd.read_csv(_erm_path, index_col='model')
+    if 'reference' in _ep.index:
+        _ref_erm = _ep.loc['reference'].values.astype(float)
+        REF['expt']['erm'] = pearsonr(_ref_erm[_m], exp[_m])[0]
+        REF['ref']['erm'] = 1.0
 
 
 def panel(ax, xcol, ycol, xlabel, ylabel, title, refx, refy):
@@ -94,23 +102,24 @@ F1_LAB = 'Base-pair F1 vs reference' + UP
 
 
 def make_main_figure(kind, shape_label, out_png):
-    """Main 2x2: SHAPE correlation vs structural accuracy (RMSD, F1).
+    """Main figure: SHAPE correlation vs structural accuracy (RMSD, F1).
+    Columns = predictors (naive, SGNM, and ERM if available); rows = RMSD, F1.
     kind in {'expt','ref'}."""
-    naive_col = f'shape_naive_vs_{kind}'
-    sgnm_col = f'shape_sgnm_vs_{kind}'
     r = REF[kind]
-    NAIVE = f'Naive SHAPE corr ({shape_label})' + UP
-    SGNM = f'SGNM SHAPE corr ({shape_label})' + UP
+    preds = [('naive', f'Naive SHAPE corr ({shape_label})'),
+             ('sgnm', f'SGNM SHAPE corr ({shape_label})')]
+    if f'shape_erm_vs_{kind}' in df.columns and df[f'shape_erm_vs_{kind}'].notna().any():
+        preds.append(('erm', f'ERM SHAPE corr ({shape_label})'))
 
-    fig, ax = plt.subplots(2, 2, figsize=(14, 12))
-    panel(ax[0, 0], 'rmsd', naive_col, RMSD_LAB, NAIVE, 'Naive SHAPE vs RMSD',
-          r['rmsd'], r['naive'])
-    panel(ax[0, 1], 'rmsd', sgnm_col, RMSD_LAB, SGNM, 'SGNM SHAPE vs RMSD',
-          r['rmsd'], r['sgnm'])
-    panel(ax[1, 0], 'f1_bp', naive_col, F1_LAB, NAIVE, 'Naive SHAPE vs F1',
-          r['f1_bp'], r['naive'])
-    panel(ax[1, 1], 'f1_bp', sgnm_col, F1_LAB, SGNM, 'SGNM SHAPE vs F1',
-          r['f1_bp'], r['sgnm'])
+    ncol = len(preds)
+    fig, ax = plt.subplots(2, ncol, figsize=(7 * ncol, 12))
+    for j, (pred, ylab) in enumerate(preds):
+        col = f'shape_{pred}_vs_{kind}'
+        refy = r['sgnm'] if pred == 'sgnm' else (r['naive'] if pred == 'naive' else r.get('erm', np.nan))
+        panel(ax[0, j], 'rmsd', col, RMSD_LAB, ylab + UP,
+              f'{pred.upper()} SHAPE vs RMSD', r['rmsd'], refy)
+        panel(ax[1, j], 'f1_bp', col, F1_LAB, ylab + UP,
+              f'{pred.upper()} SHAPE vs F1', r['f1_bp'], refy)
 
     title = ('SHAPE vs EXPERIMENTAL data' if kind == 'expt'
              else 'SHAPE vs REFERENCE-MODEL simulated data')

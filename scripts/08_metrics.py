@@ -26,8 +26,10 @@ SEED = 0
 PREDICTORS = {
     'naive (vs expt)': 'shape_naive_vs_expt',
     'SGNM (vs expt)':  'shape_sgnm_vs_expt',
+    'ERM (vs expt)':   'shape_erm_vs_expt',
     'naive (vs ref)':  'shape_naive_vs_ref',
     'SGNM (vs ref)':   'shape_sgnm_vs_ref',
+    'ERM (vs ref)':    'shape_erm_vs_ref',
 }
 
 
