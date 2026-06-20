@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """
-Create a heatmap of SHAPE predictions sorted by correlation to experimental.
-Shows: experimental SHAPE at top, then naive SHAPE predictions
-Rows are sorted by Pearson r to experimental.
-Secondary structure (dot-bracket) displayed directly on heatmap as y-labels.
-White (0) = paired, Light red (0.5) = unpaired.
+Heatmap of secondary-structure SHAPE proxies, with the dot-bracket character
+drawn ON each cell.
+
+- Color: paired = white (0.0), unpaired = light red (0.5)   [vmin=0, vmax=0.5]
+- Cell text: the actual dot-bracket character ( . ) [ ] etc.
+- Rows: experimental/reference at top, then each unique secondary structure,
+        sorted by Pearson correlation (paired/unpaired vector) to the reference.
+- Duplicate secondary structures are collapsed; the row label shows how many
+  models share that structure and the best (lowest) RMSD among them.
+
+Run after 01_compute_rmsd.py (needs results/scores.csv).
 """
 import matplotlib
 matplotlib.rcParams['font.family'] = 'Helvetica'
@@ -13,149 +19,113 @@ from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import pandas as pd
 from pathlib import Path
-import sys
-sys.path.insert(0, 'scripts')
-from f1_score import get_base_pairs
-
-# Custom colormap: white (0) to red (1)
-cmap_white_red = LinearSegmentedColormap.from_list('white_red', [(1,1,1), (1,0,0)])
-
-# Read scores
-scores_df = pd.read_csv('results/scores.csv')
-
-# Read experimental SHAPE (for now using reference SS as proxy)
-exp_shape_df = pd.read_csv('data/experimental_shape.csv')
-exp_shape_raw = exp_shape_df['shape'].values
-
-# Convert experimental to 0/0.5 scale (0=paired, 0.5=unpaired)
-# For now, use reference model structure
-import tempfile, os
-from pathlib import Path as PathlibPath
-
-def get_ss_and_shape_naive(pdb_path):
-    """Get secondary structure and naive SHAPE for a model."""
-    import subprocess
-    with tempfile.TemporaryDirectory() as tmpdir:
-        abs_pdb = str(PathlibPath(pdb_path).resolve())
-        old_cwd = os.getcwd()
-        try:
-            os.chdir(tmpdir)
-            cmd = ['x3dna-dssr', f'-i={abs_pdb}']
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-            ss_file = PathlibPath('dssr-2ndstrs.dbn')
-            if ss_file.exists():
-                lines = ss_file.read_text().splitlines()
-                if len(lines) >= 3:
-                    ss = lines[2].strip()
-                    # Convert SS to 0/0.5 scale (0=paired, 0.5=unpaired)
-                    naive_shape = np.array([0.5 if c == '.' else 0.0 for c in ss])
-                    return ss, naive_shape
-        finally:
-            os.chdir(old_cwd)
-    return None, None
-
-# Get reference model
-ref_ss, ref_shape = get_ss_and_shape_naive('data/farfar2/Mol9_reference_UtoG_buildloop.pdb')
-print(f"Reference SS: {ref_ss}")
-print(f"Reference shape (0/0.5 scale): {ref_shape}")
-
-# Use reference model SHAPE as experimental proxy
-exp_shape = ref_shape
-exp_ss = ref_ss
-
-# Prepare data for heatmap
-models_list = []
-ss_list = []
-naive_shapes = []
-
-for idx, row in scores_df.iterrows():
-    if idx % 50 == 0:
-        print(f"Processing {idx}/{len(scores_df)}...")
-
-    model_path = row['model_path']
-    ss, naive_shape = get_ss_and_shape_naive(model_path)
-
-    if naive_shape is not None and len(naive_shape) == len(exp_shape):
-        models_list.append({
-            'path': model_path,
-            'name': PathlibPath(model_path).stem,
-            'source': row['source']
-        })
-        ss_list.append(ss)
-        naive_shapes.append(naive_shape)
-
-print(f"Collected {len(models_list)} models with valid SHAPE data")
-
-# Compute correlations to experimental SHAPE
+import subprocess, tempfile, os
 from scipy.stats import pearsonr
 
-correlations = []
-for i, naive_shape in enumerate(naive_shapes):
-    try:
-        r, _ = pearsonr(naive_shape, exp_shape)
-    except:
-        r = np.nan
-    correlations.append(r)
+CMAP = LinearSegmentedColormap.from_list('white_red', [(1, 1, 1), (1, 0, 0)])
+REF_PDB = 'data/farfar2/Mol9_reference_UtoG_buildloop.pdb'
 
-# Sort by correlation (descending)
-sorted_indices = np.argsort([-c if not np.isnan(c) else -np.inf for c in correlations])
 
-# Create heatmap data: experimental at top, then models
-heatmap_data = np.vstack([
-    exp_shape.reshape(1, -1),
-    np.array(naive_shapes)[sorted_indices]
-])
+def dssr_ss(pdb_path):
+    """Return dot-bracket secondary structure for a PDB via DSSR."""
+    with tempfile.TemporaryDirectory() as tmp:
+        ap = os.path.abspath(pdb_path)
+        cwd = os.getcwd()
+        try:
+            os.chdir(tmp)
+            subprocess.run(['x3dna-dssr', f'-i={ap}'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            f = Path('dssr-2ndstrs.dbn')
+            if f.exists():
+                lines = f.read_text().splitlines()
+                if len(lines) >= 3:
+                    return lines[2].strip()
+        finally:
+            os.chdir(cwd)
+    return None
 
-# Create y-labels with secondary structure and correlation
-y_labels = [f"Experimental: {exp_ss}"]
-for i in sorted_indices:
-    corr_val = correlations[i]
-    if np.isnan(corr_val):
-        corr_str = "r=NA"
-    else:
-        corr_str = f"r={corr_val:.3f}"
-    y_labels.append(f"{models_list[i]['name']} [{ss_list[i]}] {corr_str}")
 
-# Create figure
-fig, ax = plt.subplots(figsize=(20, max(10, len(sorted_indices) * 0.25)))
+def unpaired_vec(ss):
+    """0.5 for unpaired (.), 0.0 for paired (everything else)."""
+    return np.array([0.5 if c == '.' else 0.0 for c in ss])
 
-# Plot heatmap
-im = ax.imshow(heatmap_data, aspect='auto', cmap=cmap_white_red, vmin=0, vmax=0.5, interpolation='nearest')
 
-# Set ticks and labels
-ax.set_yticks(range(len(y_labels)))
-ax.set_yticklabels(y_labels, fontsize=7, fontfamily='monospace')
-ax.set_xlabel('Nucleotide Position', fontsize=14, fontweight='bold')
-ax.set_title('SHAPE Profiles: Naive DSSR Predictions Sorted by Correlation to Reference', fontsize=16, fontweight='bold')
+# --- reference ---
+ref_ss = dssr_ss(REF_PDB)
+ref_vec = unpaired_vec(ref_ss)
+N = len(ref_ss)
+print(f"Reference ({N} nt): {ref_ss}")
 
-# Colorbar
-cbar = plt.colorbar(im, ax=ax, label='SHAPE Value (0=paired, 0.5=unpaired)')
+# --- all models with RMSD from scores.csv ---
+scores = pd.read_csv('results/scores.csv')
+scores['rmsd'] = pd.to_numeric(scores['rmsd'], errors='coerce')
 
-# X-axis ticks at regular intervals
-n_nt = len(exp_shape)
-tick_interval = max(10, n_nt // 20)
-ax.set_xticks(range(0, n_nt, tick_interval))
-ax.set_xticklabels(range(1, n_nt + 1, tick_interval), fontsize=10)
+print(f"Running DSSR on {len(scores)} models...")
+records = []
+for i, row in scores.iterrows():
+    if i % 50 == 0:
+        print(f"  {i}/{len(scores)}")
+    ss = dssr_ss(row['model_path'])
+    if ss is None or len(ss) != N:
+        continue
+    r = pearsonr(unpaired_vec(ss), ref_vec)[0]
+    records.append({'name': Path(row['model_path']).stem, 'source': row['source'],
+                    'ss': ss, 'rmsd': row['rmsd'], 'corr': r})
+
+df = pd.DataFrame(records)
+print(f"Collected {len(df)} models with valid SS")
+
+# --- collapse duplicate secondary structures ---
+groups = []
+for ss, g in df.groupby('ss'):
+    groups.append({
+        'ss': ss,
+        'corr': g['corr'].iloc[0],
+        'n': len(g),
+        'best_rmsd': g['rmsd'].min(),
+        'sources': '/'.join(sorted(g['source'].unique())),
+    })
+gdf = pd.DataFrame(groups).sort_values('corr', ascending=False).reset_index(drop=True)
+print(f"{len(gdf)} unique secondary structures")
+
+# --- build matrix: experimental/reference on top, then unique SS ---
+labels = [f'REFERENCE  (target)']
+matrix = [ref_vec]
+ss_strings = [ref_ss]
+for _, r in gdf.iterrows():
+    matrix.append(unpaired_vec(r['ss']))
+    ss_strings.append(r['ss'])
+    rmsd_str = f"{r['best_rmsd']:.1f}A" if pd.notna(r['best_rmsd']) else "NA"
+    labels.append(f"r={r['corr']:.2f}  n={r['n']:<2d} best={rmsd_str} [{r['sources']}]")
+matrix = np.array(matrix)
+
+n_rows = len(matrix)
+
+# --- plot: cell size tuned so dot-bracket chars are legible ---
+cell_w, cell_h = 0.13, 0.30
+fig, ax = plt.subplots(figsize=(max(12, N * cell_w + 5), max(6, n_rows * cell_h + 1)))
+ax.imshow(matrix, aspect='auto', cmap=CMAP, vmin=0, vmax=0.5, interpolation='nearest')
+
+# draw dot-bracket characters on every cell
+for r in range(n_rows):
+    ss = ss_strings[r]
+    for c in range(N):
+        ax.text(c, r, ss[c], ha='center', va='center', fontsize=5,
+                fontfamily='monospace', color='black')
+
+ax.set_yticks(range(n_rows))
+ax.set_yticklabels(labels, fontsize=7, fontfamily='monospace')
+ax.set_xlabel('Nucleotide position', fontsize=13, fontweight='bold')
+ax.set_title('Secondary-structure SHAPE proxy (white=paired, red=unpaired)\n'
+             'unique structures sorted by correlation to reference',
+             fontsize=15, fontweight='bold')
+
+# x ticks every 10 nt
+ax.set_xticks(range(0, N, 10))
+ax.set_xticklabels(range(1, N + 1, 10), fontsize=9)
 
 plt.tight_layout()
-out_png = 'results/shape_heatmap_naive.png'
-fig.savefig(out_png, dpi=150, bbox_inches='tight')
-print(f"Saved: {out_png}")
-
-# Open in Preview
-import subprocess
-subprocess.run(['open', out_png])
-
-# Save correlation data for reference
-corr_df = pd.DataFrame({
-    'model': [m['name'] for m in models_list],
-    'source': [m['source'] for m in models_list],
-    'secondary_structure': ss_list,
-    'pearson_r_naive': correlations
-})
-corr_df = corr_df.sort_values('pearson_r_naive', ascending=False, na_position='last')
-corr_df.to_csv('results/shape_correlations_naive.csv', index=False)
-print(f"Saved correlation data to results/shape_correlations_naive.csv")
-
-print(f"\nHeatmap includes {len(models_list)} models sorted by Pearson r to reference")
-
+out = 'results/shape_heatmap_naive.png'
+fig.savefig(out, dpi=150, bbox_inches='tight')
+print(f"Saved {out}")
+subprocess.run(['open', out])
