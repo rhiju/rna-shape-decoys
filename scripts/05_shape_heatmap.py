@@ -19,35 +19,14 @@ from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import pandas as pd
 from pathlib import Path
-import subprocess, tempfile, os
+import subprocess, sys
 from scipy.stats import pearsonr
+
+sys.path.insert(0, 'scripts')
+from dssr_util import dssr_ss, unpaired_vec
 
 CMAP = LinearSegmentedColormap.from_list('white_red', [(1, 1, 1), (1, 0, 0)])
 REF_PDB = 'data/farfar2/Mol9_reference_UtoG_buildloop.pdb'
-
-
-def dssr_ss(pdb_path):
-    """Return dot-bracket secondary structure for a PDB via DSSR."""
-    with tempfile.TemporaryDirectory() as tmp:
-        ap = os.path.abspath(pdb_path)
-        cwd = os.getcwd()
-        try:
-            os.chdir(tmp)
-            subprocess.run(['x3dna-dssr', f'-i={ap}'],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            f = Path('dssr-2ndstrs.dbn')
-            if f.exists():
-                lines = f.read_text().splitlines()
-                if len(lines) >= 3:
-                    return lines[2].strip()
-        finally:
-            os.chdir(cwd)
-    return None
-
-
-def unpaired_vec(ss):
-    """0.5 for unpaired (.), 0.0 for paired (everything else)."""
-    return np.array([0.5 if c == '.' else 0.0 for c in ss])
 
 
 # --- reference ---

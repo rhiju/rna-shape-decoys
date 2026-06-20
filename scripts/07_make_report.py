@@ -10,16 +10,19 @@ def img_b64(path):
     return base64.b64encode(Path(path).read_bytes()).decode()
 
 df = pd.read_csv('results/scores.csv')
-for c in ['rmsd', 'f1_bp', 'shape_naive', 'shape_sgnm_vs_ref']:
-    df[c] = pd.to_numeric(df[c], errors='coerce')
+for c in df.columns:
+    if c.startswith('shape_') or c in ('rmsd', 'f1_bp'):
+        df[c] = pd.to_numeric(df[c], errors='coerce')
 
 def rho(x, y):
     m = df[x].notna() & df[y].notna()
     return spearmanr(df[m][x], df[m][y])[0] if m.sum() > 2 else float('nan')
 
 metrics = {
-    'Naive paired/unpaired SHAPE vs RMSD': rho('shape_naive', 'rmsd'),
-    'SGNM-predicted SHAPE vs RMSD': rho('shape_sgnm_vs_ref', 'rmsd'),
+    'Naive SHAPE (vs experiment) vs RMSD': rho('shape_naive_vs_expt', 'rmsd'),
+    'SGNM SHAPE (vs experiment) vs RMSD': rho('shape_sgnm_vs_expt', 'rmsd'),
+    'Naive SHAPE (vs ref model) vs RMSD': rho('shape_naive_vs_ref', 'rmsd'),
+    'SGNM SHAPE (vs ref model) vs RMSD': rho('shape_sgnm_vs_ref', 'rmsd'),
     'Base-pair F1 vs RMSD': rho('f1_bp', 'rmsd'),
 }
 
@@ -50,10 +53,16 @@ Decoys: <b>{n_farfar}</b> FARFAR2 + <b>{n_casp}</b> CASP17 submitted models.</p>
 <p class="cap">More negative ρ = better discrimination (lower RMSD → higher SHAPE agreement).</p>
 <table><tr><th>Metric</th><th>Spearman ρ</th></tr>{rows}</table>
 
-<h2>SHAPE score vs RMSD &amp; base-pair F1</h2>
-<img src="data:image/png;base64,{img_b64('results/shape_vs_rmsd.png')}">
-<p class="cap">Top-right: SGNM-predicted SHAPE correlation to the reference-model profile vs RMSD —
-good models cluster near r≈0.8 and fan down toward negative correlation as RMSD grows.</p>
+<h2>SHAPE score vs RMSD &amp; F1 — vs EXPERIMENTAL data</h2>
+<img src="data:image/png;base64,{img_b64('results/shape_vs_rmsd_experimental.png')}">
+<p class="cap">Predicted SHAPE correlated to <b>experimental</b> 2A3 SHAPE (OpenKnot gRNAde P20).
+The reference (true) structure is the black star — it sits near the top at its real
+correlation (~0.6), <i>not</i> 1.0, confirming the true fold best matches experiment.</p>
+
+<h2>SHAPE score vs RMSD &amp; F1 — vs REFERENCE-MODEL simulated data</h2>
+<img src="data:image/png;base64,{img_b64('results/shape_vs_rmsd_reference.png')}">
+<p class="cap">Predicted SHAPE correlated to the reference-model simulated SHAPE (ceiling analysis).
+The reference trivially sits at correlation = 1.0 (black star).</p>
 
 <h2>Secondary-structure SHAPE proxy heatmap</h2>
 <img src="data:image/png;base64,{img_b64('results/shape_heatmap_naive.png')}">

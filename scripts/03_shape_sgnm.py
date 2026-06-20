@@ -41,6 +41,12 @@ exp_shape = pd.to_numeric(exp_df['shape'], errors='coerce').values
 has_expt = not np.all(np.isnan(exp_shape))
 print(f"  Experimental SHAPE available: {has_expt}")
 
+# Reference model's own SGNM-vs-experimental correlation (the ceiling / sanity check)
+if has_expt and len(ref_shape) == len(exp_shape):
+    _m = ~np.isnan(exp_shape)
+    ref_vs_expt = pearsonr(ref_shape[_m], exp_shape[_m])[0]
+    print(f"  Reference SGNM SHAPE vs experimental: r={ref_vs_expt:.3f}  (ceiling)")
+
 # Gather all model PDBs
 model_files = sorted(Path('data/farfar2').glob('Mol9.out.*.pdb'))
 model_files += sorted(Path('data/casp17/R2307').glob('R2307TS*.pdb'))
