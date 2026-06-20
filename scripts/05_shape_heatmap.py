@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 Create a heatmap of SHAPE predictions sorted by correlation to experimental.
-Shows: experimental SHAPE, naive SHAPE, SGNM SHAPE, ERM SHAPE (once available)
+Shows: experimental SHAPE at top, then naive SHAPE predictions
 Rows are sorted by Pearson r to experimental.
-Secondary structure (dot-bracket) shown below each profile.
+Secondary structure (dot-bracket) displayed directly on heatmap as y-labels.
 White (0) = paired, Light red (0.5) = unpaired.
 """
 import matplotlib
@@ -23,11 +23,12 @@ cmap_white_red = LinearSegmentedColormap.from_list('white_red', [(1,1,1), (1,0,0
 # Read scores
 scores_df = pd.read_csv('results/scores.csv')
 
-# Read experimental SHAPE (placeholder for now - will be actual experimental once we have it)
+# Read experimental SHAPE (for now using reference SS as proxy)
 exp_shape_df = pd.read_csv('data/experimental_shape.csv')
-exp_shape = exp_shape_df['shape'].values
+exp_shape_raw = exp_shape_df['shape'].values
 
-# Get reference secondary structure for pairing info
+# Convert experimental to 0/0.5 scale (0=paired, 0.5=unpaired)
+# For now, use reference model structure
 import tempfile, os
 from pathlib import Path as PathlibPath
 
@@ -46,18 +47,21 @@ def get_ss_and_shape_naive(pdb_path):
                 lines = ss_file.read_text().splitlines()
                 if len(lines) >= 3:
                     ss = lines[2].strip()
-                    # Convert SS to binary (0=paired, 1=unpaired)
-                    naive_shape = np.array([1.0 if c == '.' else 0.0 for c in ss])
+                    # Convert SS to 0/0.5 scale (0=paired, 0.5=unpaired)
+                    naive_shape = np.array([0.5 if c == '.' else 0.0 for c in ss])
                     return ss, naive_shape
         finally:
             os.chdir(old_cwd)
     return None, None
 
-# Collect all SHAPE data
-ref_ss, ref_naive_shape = get_ss_and_shape_naive('data/farfar2/Mol9_reference_UtoG_buildloop.pdb')
-
+# Get reference model
+ref_ss, ref_shape = get_ss_and_shape_naive('data/farfar2/Mol9_reference_UtoG_buildloop.pdb')
 print(f"Reference SS: {ref_ss}")
-print(f"Reference naive SHAPE shape: {ref_naive_shape.shape}")
+print(f"Reference shape (0/0.5 scale): {ref_shape}")
+
+# Use reference model SHAPE as experimental proxy
+exp_shape = ref_shape
+exp_ss = ref_ss
 
 # Prepare data for heatmap
 models_list = []
@@ -82,7 +86,7 @@ for idx, row in scores_df.iterrows():
 
 print(f"Collected {len(models_list)} models with valid SHAPE data")
 
-# Compute correlations to experimental (naive SHAPE)
+# Compute correlations to experimental SHAPE
 from scipy.stats import pearsonr
 
 correlations = []
@@ -93,57 +97,45 @@ for i, naive_shape in enumerate(naive_shapes):
         r = np.nan
     correlations.append(r)
 
-# Sort by correlation
-sorted_indices = np.argsort(correlations)[::-1]  # Descending
+# Sort by correlation (descending)
+sorted_indices = np.argsort([-c if not np.isnan(c) else -np.inf for c in correlations])
 
-# Create heatmap
-n_models = len(sorted_indices)
-n_nt = len(exp_shape)
-
-# Stack SHAPE profiles (rows = models, cols = nucleotides)
-# Include experimental at the top
+# Create heatmap data: experimental at top, then models
 heatmap_data = np.vstack([
     exp_shape.reshape(1, -1),
     np.array(naive_shapes)[sorted_indices]
 ])
 
-# Create figure with multiple rows
-fig = plt.figure(figsize=(16, max(8, n_models * 0.3)))
+# Create y-labels with secondary structure and correlation
+y_labels = [f"Experimental: {exp_ss}"]
+for i in sorted_indices:
+    corr_val = correlations[i]
+    if np.isnan(corr_val):
+        corr_str = "r=NA"
+    else:
+        corr_str = f"r={corr_val:.3f}"
+    y_labels.append(f"{models_list[i]['name']} [{ss_list[i]}] {corr_str}")
 
-# Main heatmap
-ax_hm = plt.subplot(2, 1, 1)
-im = ax_hm.imshow(heatmap_data, aspect='auto', cmap=cmap_white_red, vmin=0, vmax=1)
+# Create figure
+fig, ax = plt.subplots(figsize=(20, max(10, len(sorted_indices) * 0.25)))
 
-# Y labels: "Experimental" + model names sorted by correlation
-y_labels = ['Experimental'] + [
-    f"{models_list[i]['name']} (r={correlations[i]:.2f})"
-    for i in sorted_indices
-]
+# Plot heatmap
+im = ax.imshow(heatmap_data, aspect='auto', cmap=cmap_white_red, vmin=0, vmax=0.5, interpolation='nearest')
 
-ax_hm.set_yticks(range(len(y_labels)))
-ax_hm.set_yticklabels(y_labels, fontsize=8)
-ax_hm.set_xlabel('Nucleotide Position', fontsize=12, fontweight='bold')
-ax_hm.set_title('SHAPE Profiles: Naive DSSR Predictions Sorted by Correlation', fontsize=14, fontweight='bold')
+# Set ticks and labels
+ax.set_yticks(range(len(y_labels)))
+ax.set_yticklabels(y_labels, fontsize=7, fontfamily='monospace')
+ax.set_xlabel('Nucleotide Position', fontsize=14, fontweight='bold')
+ax.set_title('SHAPE Profiles: Naive DSSR Predictions Sorted by Correlation to Reference', fontsize=16, fontweight='bold')
 
 # Colorbar
-cbar = plt.colorbar(im, ax=ax_hm, label='SHAPE Value (0=paired, 1=unpaired)')
+cbar = plt.colorbar(im, ax=ax, label='SHAPE Value (0=paired, 0.5=unpaired)')
 
-# Secondary structures subplot
-ax_ss = plt.subplot(2, 1, 2)
-ax_ss.axis('off')
-
-# Display reference SS and all model SS
-ss_text = "Secondary Structures (dot-bracket notation):\n\n"
-ss_text += f"Reference: {ref_ss}\n\n"
-for i, idx in enumerate(sorted_indices[:min(10, n_models)]):  # Show top 10
-    ss_text += f"{models_list[idx]['name']}: {ss_list[idx]}\n"
-
-if n_models > 10:
-    ss_text += f"\n... and {n_models - 10} more structures"
-
-ax_ss.text(0.05, 0.95, ss_text, transform=ax_ss.transAxes,
-          fontfamily='monospace', fontsize=9, verticalalignment='top',
-          bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
+# X-axis ticks at regular intervals
+n_nt = len(exp_shape)
+tick_interval = max(10, n_nt // 20)
+ax.set_xticks(range(0, n_nt, tick_interval))
+ax.set_xticklabels(range(1, n_nt + 1, tick_interval), fontsize=10)
 
 plt.tight_layout()
 out_png = 'results/shape_heatmap_naive.png'
@@ -158,9 +150,12 @@ subprocess.run(['open', out_png])
 corr_df = pd.DataFrame({
     'model': [m['name'] for m in models_list],
     'source': [m['source'] for m in models_list],
+    'secondary_structure': ss_list,
     'pearson_r_naive': correlations
 })
-corr_df = corr_df.sort_values('pearson_r_naive', ascending=False)
+corr_df = corr_df.sort_values('pearson_r_naive', ascending=False, na_position='last')
 corr_df.to_csv('results/shape_correlations_naive.csv', index=False)
 print(f"Saved correlation data to results/shape_correlations_naive.csv")
+
+print(f"\nHeatmap includes {len(models_list)} models sorted by Pearson r to reference")
 
