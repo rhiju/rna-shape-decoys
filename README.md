@@ -78,17 +78,48 @@ python3 scripts/04_plot.py
 - **TMscore**: RMSD computation
 - Python: pandas, scipy, matplotlib, numpy
 
-## Next Steps (Phase 2)
+## SGNM setup (working)
 
-1. **SGNM/ERM SHAPE predictions**: Clone and run `https://github.com/hmblair/sgnm` on all models
-   - Compare vs. experimental SHAPE (ceiling analysis)
-   - Compare vs. reference-model SHAPE (removes systematic bias)
+The hmblair SHAPE-from-structure stack is installed and working on this Mac:
 
-2. **F1 base-pair scoring**: Compute F1 of predicted vs reference secondary structure
+```bash
+brew install gperf                      # ciffy C extension needs gperf
+cd ~/src/dlu   && pip install .         # regular install (NOT -e) — see note
+cd ~/src/ciffy && pip install .
+cd ~/src/sgnm  && pip install . --no-deps
+cd ~/src/sgnm  && gh release download v2.0.2 -p "*checkpoint*"
+```
 
-3. **Quantitative metrics**: P@5, MAP@5, Spearman/Pearson across all SHAPE metrics
+**Important**: use a *regular* `pip install`, not editable (`-e`). Because
+`~/src` is on `PYTHONPATH`, editable installs of `dlu`/`ciffy` collide with the
+repo-root namespace package and fail to import. A regular install puts a real
+package in site-packages that wins priority.
 
-4. **RNAnix pipeline**: Integrate 3D structure predictions from un-released RNAnix model
+- **GNM model** (`gnm-checkpoint.pth`): runs on CPU/Mac. Used here.
+- **Equivariant model** (`equivariant-checkpoint.pth`): needs `flash-eq`
+  (CUDA-only) — run on a GPU node for phase 3 (higher accuracy: +0.63 vs +0.39).
+
+`scripts/sgnm_predict.py` bypasses ciffy's mmCIF loader: it computes per-residue
+centers + C2/C4/C6 frames straight from the PDB and calls `model(coords, frames)`,
+verified to reproduce `model.ciffy()` exactly.
+
+## Results (vs reference structure)
+
+| Metric | Spearman ρ vs RMSD |
+|---|---|
+| Naive paired/unpaired SHAPE | −0.46 |
+| SGNM-predicted SHAPE | −0.43 |
+| Base-pair F1 | −0.48 |
+
+All three discriminate near-native from non-native structures. See `results.html`.
+
+## Next Steps (Phase 3)
+
+1. **Experimental SHAPE**: obtain real per-nucleotide reactivity for R2307 and
+   compare predictions against it (current analysis uses reference-model profile).
+2. **Equivariant (ERM) model**: run on a CUDA node for the stronger predictor.
+3. **Quantitative metrics**: P@5, MAP@5 for SHAPE-based ranking.
+4. **RNAnix pipeline**: integrate the un-released RNAnix 3D refiner/ranker.
 
 ## References
 
