@@ -29,6 +29,28 @@ metrics = {
 n_farfar = (df['source'] == 'farfar2').sum()
 n_casp = (df['source'] == 'casp17').sum()
 
+# --- retrieval metrics table (from 08_metrics.py) ---
+metrics_section = ''
+mpath = Path('results/discrimination_metrics.csv')
+if mpath.exists():
+    md = pd.read_csv(mpath)
+    show = ['predictor', 'best_top5', 'best_top10', 'auprc', 'auprc_ci95',
+            'auprc_p', 'EF_top10pct']
+    hdr = ''.join(f'<th>{c}</th>' for c in show)
+    body = ''
+    for _, r in md.iterrows():
+        body += '<tr>' + ''.join(f'<td>{r[c]}</td>' for c in show) + '</tr>'
+    metrics_section = f"""<h2>Decoy-retrieval metrics (the bottom line)</h2>
+<p class="cap">This is a retrieval problem: fish low-RMSD models (positive = RMSD &lt; 6 Å,
+{int(md['n_good'].iloc[0])} of ~{int(md['n_models'].iloc[0])}) from a mostly-bad pool.
+<b>best_topN</b> = lowest RMSD (Å) among the top-N SHAPE-ranked models (pool best = 4.6 Å).
+<b>AUPRC</b> = average precision (random ≈ {md['random_auprc'].iloc[0]}); higher is better.
+<b>EF_top10pct</b> = enrichment over random in the top 10%. Lower auprc_p = more significant.</p>
+<table><tr>{hdr}</tr>{body}</table>
+<p class="cap"><b>vs experiment:</b> SGNM clearly beats naive (AUPRC 0.14 vs 0.07,
+enrichment 2.8× vs 0.9×, best-in-top-10 = 5.2 Å vs 10.7 Å). With only ~11 positives,
+CIs are wide — treat as indicative, to be firmed up once ERM is added.</p>"""
+
 rows = ''.join(
     f"<tr><td>{k}</td><td>{v:+.3f}</td></tr>" for k, v in metrics.items()
 )
@@ -52,6 +74,8 @@ Decoys: <b>{n_farfar}</b> FARFAR2 + <b>{n_casp}</b> CASP17 submitted models.</p>
 <h2>Discrimination summary (Spearman ρ vs RMSD)</h2>
 <p class="cap">More negative ρ = better discrimination (lower RMSD → higher SHAPE agreement).</p>
 <table><tr><th>Metric</th><th>Spearman ρ</th></tr>{rows}</table>
+
+{metrics_section}
 
 <h2>SHAPE score vs RMSD &amp; F1 — vs EXPERIMENTAL data</h2>
 <img src="data:image/png;base64,{img_b64('results/shape_vs_rmsd_experimental.png')}">
