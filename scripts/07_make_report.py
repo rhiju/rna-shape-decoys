@@ -38,6 +38,9 @@ FIGURES = [
     ('SGNM-predicted SHAPE profile heatmap', 'results/shape_heatmap_sgnm.png',
      'Continuous SGNM-predicted reactivity (per-row normalized), sorted by '
      'correlation to the reference-model profile.'),
+    ('ERM-predicted SHAPE profile heatmap', 'results/shape_heatmap_erm.png',
+     'Continuous ERM-predicted reactivity (per-row normalized), sorted by '
+     'correlation to the reference-model profile.'),
 ]
 
 INTRO = (f"CASP17 target **R2307** (reference: FARFAR2 `Mol9_reference_UtoG_buildloop`). "

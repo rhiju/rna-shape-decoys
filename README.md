@@ -1,5 +1,7 @@
 # RNA SHAPE vs. Decoy RMSD Discrimination (R2307)
 
+📊 **[Full results writeup with figures → `results.md`](results.md)** (also [`results.html`](results.html) / [`results.pdf`](results.pdf))
+
 ## Overview
 
 This project tests whether SHAPE reactivity data can discriminate near-native from non-native RNA 3D structures. We analyze CASP17 target R2307 (PDB: 10ZT) using two datasets:
