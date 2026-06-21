@@ -58,12 +58,15 @@ PANELS = [('naive', 'Naive (paired/unpaired)'), ('sgnm', 'SGNM'), ('erm', 'ERM')
 
 fig, axes = plt.subplots(len(PANELS), 1, figsize=(22, 12))
 for ax, (pred, title) in zip(axes, PANELS):
-    # rows: experimental, then each structure's predicted profile
-    rows = [(exp, ref_ss, 'Experimental 2A3 SHAPE')]
+    # rows: experimental (always min-max normalized), then each structure.
+    # naive rows are shown as raw 0/0.5 (paired=white, unpaired=light red);
+    # SGNM/ERM rows are min-max normalized for visibility.
+    rows = [(norm(exp), ref_ss, 'Experimental 2A3 SHAPE')]
     for name, ss, tag in STRUCTS:
         v = profile(pred, name, ss)
-        rows.append((v, ss, f'{tag}  r={cc(v):.2f}'))
-    matrix = np.vstack([norm(r[0]) for r in rows])
+        disp = v if pred == 'naive' else norm(v)
+        rows.append((disp, ss, f'{tag}  r={cc(v):.2f}'))
+    matrix = np.vstack([r[0] for r in rows])
     ax.imshow(matrix, aspect='auto', cmap=CMAP, vmin=0, vmax=1, interpolation='nearest')
     for ri, (_, ss, _) in enumerate(rows):
         if ss and len(ss) == N:

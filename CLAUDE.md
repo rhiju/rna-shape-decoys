@@ -17,7 +17,9 @@ python3 scripts/03_shape_sgnm.py           # SGNM GNM SHAPE vs expt & ref
 python3 scripts/04_plot.py                 # 4 figures (2 main 2x2 + f1_vs_rmsd + sgnm_vs_naive)
 python3 scripts/05_shape_heatmap.py        # secondary-structure heatmap
 python3 scripts/06_sgnm_heatmap.py         # SGNM profile heatmap
-python3 scripts/07_make_report.py          # results.html
+python3 scripts/08_metrics.py              # decoy-retrieval metrics (best-in-top-k, AUPRC, EF)
+python3 scripts/09_compare_heatmap.py      # 3-panel naive/SGNM/ERM comparison heatmap
+python3 scripts/07_make_report.py          # results.html + results.md + results.pdf
 ```
 
 Key helpers: `scripts/dssr_util.py` (DSSR SS, strips `&` backbone breaks),

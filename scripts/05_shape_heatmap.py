@@ -89,7 +89,7 @@ FS_CELL, FS_YLAB, FS_XLAB, FS_TITLE, FS_XTICK = 8, 11, 20, 22, 14
 # --- plot: cell size tuned so dot-bracket chars are legible ---
 cell_w, cell_h = 0.16, 0.34
 fig, ax = plt.subplots(figsize=(max(14, N * cell_w + 7), max(7, n_rows * cell_h + 2)))
-im = ax.imshow(matrix, aspect='auto', cmap=CMAP, vmin=0, vmax=0.5, interpolation='nearest')
+im = ax.imshow(matrix, aspect='auto', cmap=CMAP, vmin=0, vmax=1.0, interpolation='nearest')
 
 # draw dot-bracket characters on every cell
 for r in range(n_rows):
