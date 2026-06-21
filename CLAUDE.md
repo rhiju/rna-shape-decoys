@@ -59,12 +59,18 @@ column sensitive** — collapsing aligned `_atom_site` columns to single spaces
 makes it mis-read atom names (even on the official 9FO9 example: 972/1053 atoms
 go untyped). The converter now emits per-column left-justified (aligned) rows.
 
-## TODO — PR phase (after ERM is in)
+## Upstream PRs / issues (submitted 2026-06-20)
 
-Draft PRs to reduce install/usage pain for future users:
-- `hmblair/ciffy`: (a) **whitespace-tolerant mmCIF parsing** (the alignment bug
-  above — strong, well-isolated PR with a repro); (b) duplicate `fallback_version`
-  in pyproject (fixed locally); (c) optionally native PDB input.
-- `hmblair/sgnm`: pyproject requires `dlu` but the dist is `dlu-torch`
-  (use `dlu-torch` or document `--no-deps`); editable-install namespace clash.
-- `hmblair/dlu`: document the `dlu-torch` dist-name vs `dlu` import-name.
+- **hmblair/sgnm#2** (PR): dependency `dlu` -> `dlu-torch` (the published dist name;
+  bare `dlu` doesn't exist on PyPI so `pip install sgnm` failed).
+- **hmblair/ciffy#1** (issue): mmCIF parser is whitespace-column-sensitive —
+  single-spaced `_atom_site` rows fail atom typing (repro on their 9FO9 example:
+  0 untyped aligned vs 972 single-spaced). Highest-value fix; in the C parser.
+- **hmblair/ciffy#2** (PR): remove duplicate `fallback_version` in pyproject
+  (source/sdist builds only; PyPI wheels unaffected).
+
+Skipped (decided not worth a PR):
+- dlu dist-vs-import doc: README already shows `pip install dlu-torch` + `import dlu`.
+- flash-eq as an sgnm dep: already declared as the `equivariant` optional extra.
+  (Its real issue — not on PyPI + Colab wheel coverage — is a flash-eq matter.)
+- ciffy native PDB input: large; depends on the parser issue being resolved first.
